@@ -148,6 +148,7 @@ class BNMPAPIClient:
         orgao_expeditor: dict[str, Any] | None = None,
         id_estado: int | None = None,
         id_municipio: int | None = None,
+        numero_processo: str | None = None,
         page: int = 0,
         size: int = 10,
         sort: str = "",
@@ -161,6 +162,7 @@ class BNMPAPIClient:
             orgao_expeditor: Dictionary with organ expeditor filters
             id_estado: State ID filter
             id_municipio: Optional municipality ID filter
+            numero_processo: Process number filter
             page: Page number (default: 0)
             size: Page size (default: 10)
             sort: Sort parameter (default: empty string)
@@ -182,6 +184,9 @@ class BNMPAPIClient:
 
         if id_municipio is not None:
             payload["idMunicipio"] = id_municipio
+
+        if numero_processo is not None:
+            payload["numeroProcesso"] = numero_processo
 
         return self.post(url, params=params, json=payload, **kwargs)
 
@@ -221,4 +226,46 @@ class BNMPAPIClient:
         """
         url = f"/bnmpportal/api/certidaos/relatorio/{certidao_id}/{id_tipo_peca}"
         return self.post(url)
+
+    def download_csv(
+        self,
+        id_estado: int | None = None,
+        id_municipio: int | None = None,
+        busca_orgao_recursivo: bool = False,
+        orgao_expeditor: dict[str, Any] | None = None,
+        numero_processo: str = "",
+        id_sexo: int | None = None,
+    ) -> requests.Response:
+        """
+        Download CSV file with all results for a query (e.g., for a UF).
+
+        Args:
+            id_estado: State ID filter
+            id_municipio: Optional municipality ID filter
+            busca_orgao_recursivo: Whether to search recursively in organs
+            orgao_expeditor: Dictionary with organ expeditor filters
+            numero_processo: Process number filter
+            id_sexo: Gender ID filter
+
+        Returns:
+            Response object with CSV content
+        """
+        url = "/bnmpportal/api/pesquisa-pecas/csv"
+
+        payload: dict[str, Any] = {
+            "buscaOrgaoRecursivo": busca_orgao_recursivo,
+            "orgaoExpeditor": orgao_expeditor or {},
+            "numeroProcesso": numero_processo,
+        }
+
+        if id_estado is not None:
+            payload["idEstado"] = id_estado
+
+        if id_municipio is not None:
+            payload["idMunicipio"] = id_municipio
+
+        if id_sexo is not None:
+            payload["idSexo"] = id_sexo
+
+        return self.post(url, json=payload)
 
