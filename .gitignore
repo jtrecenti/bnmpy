@@ -1,0 +1,22 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Cookie files
+cookies.json
+*.cookies
+
+# Playwright browser binaries
+.ms-playwright/
+playwright-browsers/
+
+# Scraped data
+data-raw/
+browser_inspection.json
