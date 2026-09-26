@@ -1,6 +1,6 @@
 """BNMP Portal Scraper - Session management and API client."""
 
-from bnmpy.api_client import BNMPAPIClient
+from bnmpy.api_client import BNMPAPIClient, token_expiration
 from bnmpy.scraper import BNMPScraper
 from bnmpy.session_manager import (
     create_session_from_cookies,
@@ -12,6 +12,7 @@ from bnmpy.session_manager import (
 __all__ = [
     "BNMPAPIClient",
     "BNMPScraper",
+    "token_expiration",
     "get_session_with_playwright",
     "save_cookies",
     "load_cookies",

@@ -128,3 +128,46 @@ class TestAPIAuthentication:
 
         assert response.status_code in [200, 401], f"Unexpected status: {response.status_code}"
 
+
+
+class TestToken:
+    """Test JWT token authentication (portalbnmp cookie)."""
+
+    # {"sub": "guest_portalbnmp_1", "auth": "ROLE_ANONYMOUS", "exp": 1790399469}
+    TOKEN = (
+        "eyJhbGciOiJIUzUxMiJ9."
+        "eyJzdWIiOiJndWVzdF9wb3J0YWxibm1wXzEiLCJhdXRoIjoiUk9MRV9BTk9OWU1PVVMiLCJleHAiOjE3OTAzOTk0Njl9."
+        "sig"
+    )
+
+    def test_client_with_token_sets_cookie(self):
+        client = BNMPAPIClient(token=self.TOKEN)
+        assert client.session.cookies.get("portalbnmp") == self.TOKEN
+        assert client.token == self.TOKEN
+
+    def test_token_accepts_bearer_prefix(self):
+        client = BNMPAPIClient(token=f"Bearer%20{self.TOKEN}")
+        assert client.session.cookies.get("portalbnmp") == self.TOKEN
+
+    def test_set_token_replaces_cookie(self):
+        client = BNMPAPIClient(
+            cookies=[{"name": "portalbnmp", "value": "old", "domain": ".cnj.jus.br", "path": "/"}]
+        )
+        client.set_token(self.TOKEN)
+        values = [c.value for c in client.session.cookies if c.name == "portalbnmp"]
+        assert values == [self.TOKEN]
+
+    def test_token_expiration(self):
+        from bnmpy import token_expiration
+
+        assert token_expiration(self.TOKEN) == 1790399469
+        assert BNMPAPIClient(token=self.TOKEN).token_expiration == 1790399469
+        assert token_expiration("not-a-jwt") is None
+
+    def test_download_pdf_uses_emitir_documento(self):
+        client = BNMPAPIClient(token=self.TOKEN)
+        with patch.object(client.session, "post") as mock_post:
+            client.download_pdf(123, 10)
+        args, kwargs = mock_post.call_args
+        assert args[0].endswith("/bnmpportal/api/pesquisa-pecas/emitir-documento")
+        assert kwargs["json"] == {"id": 123, "idTipoPeca": 10}
