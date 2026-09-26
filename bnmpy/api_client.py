@@ -1,12 +1,35 @@
 """API client for BNMP portal using requests."""
 
+import base64
+import json
 from typing import Any
+from urllib.parse import unquote
 
 import requests
 
 from bnmpy.session_manager import create_session_from_cookies, load_cookies
 
 BNMP_API_BASE_URL = "https://portalbnmp.cnj.jus.br"
+BNMP_COOKIE_DOMAIN = "portalbnmp.cnj.jus.br"
+AUTH_COOKIE_NAME = "portalbnmp"
+
+
+def normalize_token(token: str) -> str:
+    """Return the bare JWT from a token, cookie value or Authorization header."""
+    token = unquote(token.strip())
+    if token.lower().startswith("bearer "):
+        token = token[7:].strip()
+    return token
+
+
+def token_expiration(token: str) -> int | None:
+    """Return the ``exp`` claim (unix timestamp) of a JWT, or None if unreadable."""
+    try:
+        payload = normalize_token(token).split(".")[1]
+        payload += "=" * (-len(payload) % 4)
+        return json.loads(base64.urlsafe_b64decode(payload)).get("exp")
+    except (IndexError, ValueError):
+        return None
 
 
 class BNMPAPIClient:
@@ -18,6 +41,7 @@ class BNMPAPIClient:
         cookies_file: str | None = None,
         session: requests.Session | None = None,
         fingerprint: str | None = None,
+        token: str | None = None,
     ):
         """
         Initialize the API client with cookies.
@@ -27,6 +51,8 @@ class BNMPAPIClient:
             cookies_file: Path to a JSON file containing cookies
             session: Optional pre-configured requests.Session
             fingerprint: Optional fingerprint header value (extracted from browser)
+            token: Optional JWT issued after solving the captcha (value of the
+                ``portalbnmp`` cookie). It expires about 5 minutes after issue.
         """
         if session is not None:
             self.session = session
@@ -38,10 +64,15 @@ class BNMPAPIClient:
             # Use loaded fingerprint if fingerprint not explicitly provided
             if fingerprint is None:
                 fingerprint = loaded_fingerprint
+        elif token is not None:
+            self.session = requests.Session()
         else:
             raise ValueError(
-                "Must provide either cookies, cookies_file, or session"
+                "Must provide either cookies, cookies_file, session, or token"
             )
+
+        if token is not None:
+            self.set_token(token)
 
         # Set default headers
         self.session.headers.update(
@@ -65,6 +96,33 @@ class BNMPAPIClient:
         # Set fingerprint if provided
         if fingerprint:
             self.session.headers["fingerprint"] = fingerprint
+
+    def set_token(self, token: str) -> None:
+        """Set the authentication token (``portalbnmp`` cookie)."""
+        jwt = normalize_token(token)
+        for cookie in list(self.session.cookies):
+            if cookie.name == AUTH_COOKIE_NAME:
+                self.session.cookies.clear(cookie.domain, cookie.path, cookie.name)
+        self.session.cookies.set(
+            AUTH_COOKIE_NAME,
+            jwt,
+            domain=BNMP_COOKIE_DOMAIN,
+            path="/",
+        )
+
+    @property
+    def token(self) -> str | None:
+        """Current JWT, if any."""
+        for cookie in self.session.cookies:
+            if cookie.name == AUTH_COOKIE_NAME and cookie.value:
+                return normalize_token(cookie.value)
+        return None
+
+    @property
+    def token_expiration(self) -> int | None:
+        """Expiration (unix timestamp) of the current token, if known."""
+        token = self.token
+        return token_expiration(token) if token else None
 
     def get(self, url: str, **kwargs: Any) -> requests.Response:
         """
@@ -224,8 +282,9 @@ class BNMPAPIClient:
         Returns:
             Response object with PDF content
         """
-        url = f"/bnmpportal/api/certidaos/relatorio/{certidao_id}/{id_tipo_peca}"
-        return self.post(url)
+        # The old endpoint (/certidaos/relatorio/{id}/{idTipoPeca}) now returns 500
+        url = "/bnmpportal/api/pesquisa-pecas/emitir-documento"
+        return self.post(url, json={"id": certidao_id, "idTipoPeca": id_tipo_peca})
 
     def download_csv(
         self,

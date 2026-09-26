@@ -66,6 +66,32 @@ This will:
 - Wait for you to solve the captcha
 - Save cookies and fingerprint to `cookies.json`
 
+#### Alternative: use a token directly
+
+After solving the captcha in your own browser, copy the value of the
+`portalbnmp` cookie (DevTools > Application > Cookies) and pass it to the client:
+
+```python
+from bnmpy import BNMPAPIClient
+
+client = BNMPAPIClient(token="eyJhbGciOiJIUzUxMiJ9...")
+client.get_estados().json()
+```
+
+**The token expires 5 minutes after the captcha is solved** (see
+`client.token_expiration`). Long runs need a new token when requests start
+returning 401. You can test a token with:
+
+```bash
+uv run python scripts/smoke_test_token.py <token>
+```
+
+Notes on the current portal:
+- Page size for `pesquisa-pecas/filter` is limited to 30.
+- PDFs are downloaded from `pesquisa-pecas/emitir-documento`
+  (the old `certidaos/relatorio` endpoint returns 500).
+- Requests with a non-browser User-Agent are blocked (403).
+
 ### 2. Download CSV Files for Each UF
 
 Download CSV files for all UFs and merge them:
